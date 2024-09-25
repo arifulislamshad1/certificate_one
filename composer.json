@@ -1,0 +1,20 @@
+{
+    "name": "shadv/certificate_one",
+    "license": "mit",
+    "autoload": {
+        "psr-4": {
+            "Shadv\\CertificateOne\\": "src/"
+        }
+    },
+    "authors": [
+        {
+            "name": "arifulislamshad1",
+            "email": "shadvoia71@gmail.com"
+        }
+    ],
+    "require": {
+        "phpmailer/phpmailer": "^6.9",
+        "fpdf/fpdf": "^1.86",
+        "setasign/fpdf": "^1.8"
+    }
+}

@@ -1,4 +1,10 @@
 <?php
+use PHPMailer\PHPMailer\PHPMailer;
+use PHPMailer\PHPMailer\Exception;
+
+// Include PHPMailer autoload file
+require '../vendor/autoload.php';
+
 if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     // Load the image template (replace with your template path)
     $template = imagecreatefromjpeg('../templates/certificate_template.jpg');
@@ -35,6 +41,7 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $reg_no = trim($_POST['reg_no']);
     $issue_date = date("jS F, Y", strtotime($_POST['issue_date']));
     $gender = $_POST['gender'];
+    $email = $_POST['email']; // Fetch email input from form
 
     // Ensure there is only one space between words
     $father_name = preg_replace('/\s+/', ' ', $father_name); // Replaces multiple spaces with a single space
@@ -42,9 +49,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
 
     // Gender-specific text (using full father_name and mother_name)
     if ($gender == 'Female') {
-        $parent_text = "daughter of  $father_name &  $mother_name";  // Space after "daughter of" and between "mother_name"
+        $parent_text = "daughter of  $father_name &  $mother_name"; 
     } else {
-        $parent_text = "son of  $father_name &  $mother_name";  // Space after "son of" and between "mother_name"
+        $parent_text = "son of  $father_name &  $mother_name";
     }
 
     // Course and Organization Info
@@ -53,8 +60,9 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $organization_info = "conducted by ";
     $organization = "Alhadiya"; // Bold
 
-    // Calculate image width
-    $image_width = imagesx($template);
+    // Calculate image width and height
+    $image_width = 2430; // Width in pixels
+    $image_height = 1890; // Height in pixels
 
     // Center the Name Text using QTCoronation Font
     $text_box_name = imagettfbbox($font_size_name, 0, $font_qtcoronation, $name);
@@ -63,22 +71,19 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $name_y_position = 970; // Adjust Y position as needed
     imagettftext($template, $font_size_name, 0, $name_x_position, $name_y_position, $black_color, $font_qtcoronation, $name);
 
-    // Add Registration Number (also in RGB(89, 90, 90))
+    // Add Registration Number
     $reg_x_position = 457;
     $reg_y_position = 645;
     imagettftext($template, $font_size_normal, 0, $reg_x_position, $reg_y_position, $reg_color, $font_gabriola, $reg_no);
 
     // First Line: $parent_text and "Organic Mehendi Making Course"
-    // Combined normal and bold text
     $first_line_combined = $course_info . $course_name;
     $text_box_first_line_combined = imagettfbbox($font_size_normal, 0, $font_gabriola, $first_line_combined);
     $text_width_first_line_combined = abs($text_box_first_line_combined[4] - $text_box_first_line_combined[0]);
 
-    // Adjust X-position to move 20px left
     $first_line_x_position_combined = ($image_width / 2) - ($text_width_first_line_combined / 2) - 20;
-    $first_line_y_position = 1150; // Adjust Y position as needed
+    $first_line_y_position = 1150;
 
-    // Render the full first line (including both normal and bold parts)
     imagettftext($template, $font_size_normal, 0, $first_line_x_position_combined, $first_line_y_position, $custom_color, $font_gabriola, $course_info);
     imagettftext($template, $font_size_bold, 0, $first_line_x_position_combined + abs(imagettfbbox($font_size_normal, 0, $font_gabriola, $course_info)[2]), $first_line_y_position, $custom_color, $font_gabriola, $course_name);
 
@@ -86,36 +91,88 @@ if ($_SERVER['REQUEST_METHOD'] == 'POST') {
     $second_line_combined = $organization_info . $organization;
     $text_box_second_line_combined = imagettfbbox($font_size_normal, 0, $font_gabriola, $second_line_combined);
     $text_width_second_line_combined = abs($text_box_second_line_combined[4] - $text_box_second_line_combined[0]);
-    $second_line_x_position_combined = ($image_width / 2) - ($text_width_second_line_combined / 2); // Centering the second line based on image width
-    $second_line_y_position = $first_line_y_position + 60; // Adjust Y position for second line
+    $second_line_x_position_combined = ($image_width / 2) - ($text_width_second_line_combined / 2); 
+    $second_line_y_position = $first_line_y_position + 60;
 
-    // Render the second part (normal: "conducted by")
     imagettftext($template, $font_size_normal, 0, $second_line_x_position_combined, $second_line_y_position, $custom_color, $font_gabriola, $organization_info);
 
-    // Bold part: "Alhadiya"
-    $bold_offsets = [-1, 1]; // For bold effect
+    // Bold "Alhadiya"
+    $bold_offsets = [-1, 1];
     foreach ($bold_offsets as $offset) {
         imagettftext($template, $font_size_bold, 0, $second_line_x_position_combined + abs(imagettfbbox($font_size_normal, 0, $font_gabriola, $organization_info)[2]), $second_line_y_position + $offset, $custom_color, $font_gabriola, $organization);
     }
 
-
-    // Add Issue Date (also in RGB(89, 90, 90))
+    // Add Issue Date
     $date_x_position = 1281;
     $date_y_position = 1621;
     imagettftext($template, $font_size_normal, 0, $date_x_position, $date_y_position, $issu_color, $font_gabriola, $issue_date);
 
-    // Output options based on user's selection (Preview or Download)
+    // Save the certificate as PNG
+    $output_filename_png = '../output/certificate_' . strtolower($name) . '.png';
+    imagepng($template, $output_filename_png);
+
+    // Free up memory
+    imagedestroy($template);
+
+    // Convert PNG to PDF using FPDF
+    $output_filename_pdf = '../output/certificate_' . strtolower($name) . '.pdf';
+    $image_width_pt = $image_width * 0.75;  // Convert to points
+    $image_height_pt = $image_height * 0.75; // Convert to points
+
+    $pdf = new \FPDF('L', 'pt', [$image_width_pt, $image_height_pt]); // Set page size to landscape
+    $pdf->AddPage();
+    $pdf->Image($output_filename_png, 0, 0, $image_width_pt, $image_height_pt); // No scaling, use full size
+    $pdf->Output($output_filename_pdf, 'F');
+
+    // Send Email if 'send' button is clicked
+    if (isset($_POST['send'])) {
+        $mail = new PHPMailer(true);
+
+        try {
+            // SMTP Configuration
+            $mail->isSMTP();
+            $mail->Host = 'smtp.gmail.com';
+            $mail->SMTPAuth = true;
+            $mail->Username = 'shadvoia71@gmail.com'; // Your email
+            $mail->Password = 'wvvp fgvu ahel wmnq';    // Your app password (from Google)
+            $mail->SMTPSecure = 'ssl';
+            $mail->Port = 465;
+
+            // Email Settings
+            $mail->setFrom('shadvoia71@gmail.com', 'Alhadiya Organic Mehendi Course ');
+            $mail->addAddress($email); // Send to recipient's email
+
+            // Attachments
+            $mail->addAttachment($output_filename_png, 'Certificate.png');
+            $mail->addAttachment($output_filename_pdf, 'Certificate.pdf');
+
+    // Email Content
+$mail->isHTML(true);
+$mail->Subject = 'Alhadiya Organic Mehendi Course certificate';
+$mail->Body    = 'Thank You for Completing the Alhadiya Organic Mehendi Course <br><br>
+                  Please find your certificate attached in both PNG and PDF formats.<br><br>
+                  If you have any questions or need further assistance, please feel free to reach out.<br><br>
+                  Best regards,<br>
+                  Md. Ariful Islam Shad<br>
+                  Website: <a href="http://alhadiya.com.bd">alhadiya.com.bd</a><br>
+                  Contact No: 01737146996<br>
+                  Page Link: <a href="https://web.facebook.com/alhadiyaofficial">facebook.com/alhadiyaofficial</a>';
+
+
+            $mail->send();
+            echo "Email sent successfully!";
+        } catch (Exception $e) {
+            echo "Failed to send email: {$mail->ErrorInfo}";
+        }
+    }
+
+    // Output options (Preview or Download)
     if (isset($_POST['preview'])) {
         header('Content-Type: image/png');
         imagepng($template);
     } elseif (isset($_POST['download'])) {
-        $output_filename = '../output/certificate_' . strtolower($name) . '.png';
-        imagepng($template, $output_filename);
         echo "Certificate generated successfully! <br>";
-        echo "<a href='$output_filename' download>Download Certificate</a>";
+        echo "<a href='$output_filename_png' download>Download PNG Certificate</a> | <a href='$output_filename_pdf' download>Download PDF Certificate</a>";
     }
-
-    // Free up memory
-    imagedestroy($template);
 }
 ?>
